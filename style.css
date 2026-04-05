@@ -1,0 +1,44 @@
+body { 
+    margin:0; padding:0; overflow:hidden; background:#111; font-family:sans-serif; 
+    touch-action:none; 
+}
+
+#gameCanvas { 
+    display:block; 
+    position: absolute;
+	top: 0;
+    image-rendering: crisp-edges;   /* optionnel : rend plus net */
+  
+}
+
+#score, #timer { 
+    position:absolute; color:white; font-size:24px; text-shadow:0 0 5px black; 
+    opacity:0.9; pointer-events:none; z-index:10; 
+}
+#score { top:10px; right:20px; }
+#timer { top:50px; right:20px; }
+
+.hamburger-menu { 
+    position:absolute; top:10px; left:10px; z-index:300; 
+}
+#hamburger { 
+    font-size:30px; background:none; border:none; color:white; cursor:pointer; 
+}
+
+#menu-content { 
+    position:absolute; top:50px; left:10px; background:rgba(0,0,0,0.85); 
+    padding:15px; border-radius:8px; color:white; min-width:240px; 
+    max-height:80vh; overflow-y:auto; z-index:300;
+}
+#menu-content label { display:block; margin:8px 0; font-size:14px; }
+#menu-content input { width:100%; }
+button { margin:8px 4px; padding:10px 14px; font-size:16px; }
+
+.hidden { display:none; }
+#menu-content { display: none; }
+#menu-content.show { display: block; }
+
+/* Empêche le canvas de voler les interactions du menu */
+.hamburger-menu, #menu-content, #hamburger {
+    pointer-events: auto;
+}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HABILE - Jeu de Billes</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Menu Hamburger -->
+    <div id="menu" class="hamburger-menu">
+        <button id="hamburger">☰</button>
+        <div id="menu-content">
+            <h2 style="margin: 10px 0 15px 0; text-align:center; color:#ff0;">PARAMÈTRES</h2>
+                      <button id="applyBtn">Appliquer + Nouvelle Partie</button>
+                      <button id="startBtn">Reprendre</button>  
+            <label>Difficulté (<span id="diffVal">5</span>): 
+                <input type="range" id="diff" min="1" max="10" value="5" step="0.1">
+            </label><br>
+            
+            <label>Nombre de trous (<span id="holesVal">4</span>): 
+                <input type="range" id="holes" min="2" max="8" value="4">
+            </label><br>
+            
+            <label>Sensibilité rebond (<span id="reboundVal">1</span>): 
+                <input type="range" id="rebound" min="0.5" max="2" step="0.1" value="1">
+            </label><br>
+            
+            <label>Sensibilité niveau (<span id="tiltSensVal">1.5</span>): 
+                <input type="range" id="tiltSens" min="0.5" max="3" step="0.1" value="1.5">
+            </label><br>
+            
+            <label>Puissance ressort (<span id="powerVal">15</span>): 
+                <input type="range" id="power" min="5" max="30" value="15">
+            </label><br>
+            
+            <label>Poids bille (<span id="massVal">1</span>): 
+                <input type="range" id="mass" min="0.5" max="3" step="0.1" value="1">
+            </label><br>
+            
+            <label>Échelle (<span id="scaleVal">1</span>): 
+                <input type="range" id="scale" min="0.7" max="1.5" step="0.05" value="1">
+            </label><br>
+            
+            <label>Durée max (min) (<span id="durationVal">5</span>): 
+                <input type="range" id="duration" min="1" max="10" value="5">
+            </label><br>
+
+
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="score">Score : <span id="scoreValue">0</span></div>
+    <div id="timer">Temps : <span id="timeValue">300</span>s</div>
+
+    <script src="script.js"></script>
+</body>
+</html>
