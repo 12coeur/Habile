@@ -2,7 +2,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-let WIDTH, HEIGHT, scaleFactor = 1;
+let WIDTH, HEIGHT, baseScale = 1;
 let userScale = 1;
 
 let ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 40, mass: 1, visible: false, alpha: 1 };
@@ -10,7 +10,7 @@ let holes = [];
 let spring = { x: 0, y: 0, length: 0, maxLength: 0, pulled: 0, disappearing: false, alpha: 1, width: 80 };
 let tilt = { x: 0, y: 0 };
 let score = 0;
-let timeLeft = 300;
+let timeLeft = 120;
 let gameRunning = false;
 let ballLaunched = false;
 
@@ -18,7 +18,7 @@ let difficulty = 5;
 let reboundSens = 1;
 let tiltSens = 1.5;
 let numHoles = 4;
-let maxDuration = 300;
+let maxDuration = 120;
 
 let images = {};
 let sounds = {};
@@ -36,21 +36,21 @@ hamburger.addEventListener('click', (e) => {
     menuContent.classList.toggle('show');
 });
 
-document.getElementById('startBtn').addEventListener('click', (e) => {
-    e.stopImmediatePropagation();
-    menuContent.classList.remove('show');
-});
-
 document.getElementById('applyBtn').addEventListener('click', (e) => {
     e.stopImmediatePropagation();
 
-    difficulty = parseFloat(document.getElementById('diff').value);
-    numHoles = parseInt(document.getElementById('holes').value);
-    reboundSens = parseFloat(document.getElementById('rebound').value);
-    tiltSens = parseFloat(document.getElementById('tiltSens').value);
-    ball.mass = parseFloat(document.getElementById('mass').value);
-    maxDuration = parseFloat(document.getElementById('duration').value) * 60;
-    userScale = parseFloat(document.getElementById('scale').value || 1);
+    difficulty = Math.max(1, Math.min(10, parseInt(document.getElementById('diff').value) || 5));
+    numHoles = parseInt(document.getElementById('holes').value) || 4;
+    reboundSens = parseFloat(document.getElementById('rebound').value) || 1;
+    tiltSens = parseFloat(document.getElementById('tiltSens').value) || 1.5;
+    ball.mass = parseFloat(document.getElementById('mass').value) || 1;
+
+    let durationMin = parseFloat(document.getElementById('duration').value) || 2;
+    durationMin = Math.max(1, Math.min(5, durationMin));
+    document.getElementById('duration').value = durationMin;
+
+    maxDuration = durationMin * 60;
+    userScale = Math.max(0.5, Math.min(2, parseFloat(document.getElementById('scale').value) || 1));
 
     score = 0;
     timeLeft = maxDuration;
@@ -59,9 +59,10 @@ document.getElementById('applyBtn').addEventListener('click', (e) => {
 
     generateHoles(numHoles);
     resetBall();
+    resize();
 
     menuContent.classList.remove('show');
-    console.log("✅ Paramètres appliqués");
+    console.log(`✅ Nouvelle partie : ${durationMin} min | Scale: ${userScale}`);
 });
 
 // ====================== CHARGEMENT ASSETS ======================
@@ -78,7 +79,6 @@ function loadAssets() {
     Object.keys(soundFiles).forEach(key => {
         sounds[key] = new Audio(soundFiles[key]);
         sounds[key].preload = 'auto';
-        sounds[key].load();
     });
 }
 
@@ -90,7 +90,6 @@ function resize() {
     const ratio = 9 / 16;
     let gameHeight = winH;
     let gameWidth = Math.floor(gameHeight * ratio);
-
     if (gameWidth > winW) {
         gameWidth = winW;
         gameHeight = Math.floor(gameWidth / ratio);
@@ -99,47 +98,52 @@ function resize() {
     canvas.width = gameWidth;
     canvas.height = gameHeight;
 
-    const offsetX = winW - gameWidth;
     canvas.style.position = 'absolute';
-    canvas.style.left = offsetX + 'px';
+    canvas.style.left = (winW - gameWidth) + 'px';
     canvas.style.top = '0px';
 
     WIDTH = gameWidth;
     HEIGHT = gameHeight;
 
-    scaleFactor = Math.min(WIDTH / 900, HEIGHT / 1600) * 0.92 * userScale;
+    baseScale = Math.min(WIDTH / 900, HEIGHT / 1600) * 0.92;
+    const totalScale = baseScale * userScale;
 
     spring.x = WIDTH * 0.88;
     spring.y = HEIGHT * 0.80;
     spring.maxLength = HEIGHT * 0.155;
-    spring.length = spring.maxLength;
-    spring.width = ball.radius * 2;
+    spring.width = 80 * totalScale;
 
     generateHoles(numHoles);
     resetBall();
+    draw();                    // ← important pour éviter l'écran noir
 }
 
 // ====================== HOLES ======================
 function isTooClose(x, y) {
-    return holes.some(h => Math.hypot(x - h.x, y - h.y) < 110);
+    return holes.some(h => Math.hypot(x - h.x, y - h.y) < 110 * baseScale * userScale);
 }
 
 function isTooCloseToSpring(x, y) {
-    return Math.hypot(x - spring.x, y - spring.y) < 220;
+    return Math.hypot(x - spring.x, y - spring.y) < 220 * baseScale * userScale;
 }
 
 function generateHoles(count) {
     holes = [];
-    const margin = 100;
+    const margin = 100 * baseScale * userScale;
     for (let i = 0; i < count; i++) {
         let attempts = 0, hx, hy;
         do {
             hx = margin + Math.random() * (WIDTH - 2 * margin);
             hy = margin + Math.random() * (HEIGHT - 2 * margin);
             attempts++;
-        } while ((isTooClose(hx, hy) || isTooCloseToSpring(hx, hy)) && attempts < 60);
+        } while ((isTooClose(hx, hy) || isTooCloseToSpring(hx, hy)) && attempts < 80);
 
-        holes.push({ x: hx, y: hy, radius: 35, bourrelet: difficulty, eaten: false });
+        holes.push({
+            x: hx, y: hy,
+            radius: 35 * baseScale * userScale,
+            bourrelet: difficulty,
+            eaten: false
+        });
     }
 }
 
@@ -160,16 +164,11 @@ function checkAllHolesBlocked() {
 function updatePhysics(delta) {
     if (!gameRunning || !ball.visible) return;
 
-    if (spring.disappearing && spring.alpha > 0) {
-        spring.alpha -= delta * 5;
-        if (spring.alpha < 0) spring.alpha = 0;
-    }
+    if (spring.disappearing && spring.alpha > 0) spring.alpha -= delta * 5;
 
     if (ballLaunched) {
-        const gx = tilt.x * tiltSens * 0.3;
-        const gy = tilt.y * tiltSens * 0.3;
-        ball.vx += gx * delta * 60;
-        ball.vy += gy * delta * 60;
+        ball.vx += tilt.x * tiltSens * 0.3 * delta * 60;
+        ball.vy += tilt.y * tiltSens * 0.3 * delta * 60;
     }
 
     if (!('ontouchstart' in window) && spring.disappearing) ball.vy += 0.08;
@@ -179,7 +178,6 @@ function updatePhysics(delta) {
     ball.x += ball.vx * delta * 60;
     ball.y += ball.vy * delta * 60;
 
-    // Rebond bord elliptique
     const cx = WIDTH / 2, cy = HEIGHT / 2;
     const a = WIDTH * 0.45, b = HEIGHT * 0.45;
     const dx = ball.x - cx, dy = ball.y - cy;
@@ -192,13 +190,11 @@ function updatePhysics(delta) {
         ball.y = cy + Math.sin(angle) * b * 0.91;
     }
 
-    // ====================== INTERACTION TROUS (CORRIGÉ) ======================
     for (let h of holes) {
         const d = Math.hypot(ball.x - h.x, ball.y - h.y);
-        if (d < h.radius + ball.radius + 12) {
+        if (d < h.radius + ball.radius + 12 * baseScale * userScale) {
             const speed = Math.hypot(ball.vx, ball.vy);
 
-            // Manger le trou uniquement si très lent
             if (!h.eaten && speed < 4.0 + difficulty * 0.35) {
                 playSound('plouf');
                 const scoreMultiplier = 0.9 - (difficulty - 1) * 0.09;
@@ -206,30 +202,24 @@ function updatePhysics(delta) {
                 document.getElementById('scoreValue').textContent = score;
                 h.eaten = true;
                 ball.visible = false;
-                setTimeout(() => { 
-                    resetBall(); 
-                    checkAllHolesBlocked(); 
-                }, 800);
+                setTimeout(() => { resetBall(); checkAllHolesBlocked(); }, 800);
                 return;
             }
 
-            // RÉPULSION : forte quand trou LIBRE, nulle quand trou BLOQUÉ
-            if (!h.eaten) {   // <--- seulement quand le trou est encore libre
-                const baseRepel = h.bourrelet * 38;           // très fort à difficulty=10
+            if (!h.eaten) {
+                const baseRepel = h.bourrelet * 38;
                 const speedFactor = Math.max(0.4, 20 / (speed + 8));
-                const repel = baseRepel * speedFactor;
-
+                const repel = baseRepel * speedFactor * 0.04;
                 const nx = (ball.x - h.x) / d;
                 const ny = (ball.y - h.y) / d;
-                ball.vx += nx * repel * 0.04;
-                ball.vy += ny * repel * 0.04;
+                ball.vx += nx * repel;
+                ball.vy += ny * repel;
             }
-            // Quand h.eaten === true → aucune répulsion (inefficace)
         }
     }
 
     timeLeft -= delta;
-    document.getElementById('timeValue').textContent = Math.ceil(timeLeft);
+    document.getElementById('timeValue').textContent = Math.max(0, Math.ceil(timeLeft));
 
     if (timeLeft <= 0) {
         gameRunning = false;
@@ -240,11 +230,13 @@ function updatePhysics(delta) {
 
 // ====================== RESET ======================
 function resetBall() {
+    const totalScale = baseScale * userScale;
     spring.pulled = 0;
     spring.disappearing = false;
     spring.alpha = 1;
     spring.length = spring.maxLength;
 
+    ball.radius = 40 * totalScale;
     ball.x = spring.x;
     ball.y = spring.y - spring.length * 0.82;
     ball.vx = 0;
@@ -255,12 +247,16 @@ function resetBall() {
 
 // ====================== DESSIN ======================
 function draw() {
+    if (!WIDTH || !HEIGHT) return;
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
+    const totalScale = baseScale * userScale;
+
+    // Tapis (baseScale uniquement)
     if (images.tapisoblond && images.tapisoblond.complete) {
-        const tx = (WIDTH - 900 * scaleFactor) / 2;
-        const ty = (HEIGHT - 1600 * scaleFactor) / 2;
-        ctx.drawImage(images.tapisoblond, tx, ty, 900 * scaleFactor, 1600 * scaleFactor);
+        const tx = (WIDTH - 900 * baseScale) / 2;
+        const ty = (HEIGHT - 1600 * baseScale) / 2;
+        ctx.drawImage(images.tapisoblond, tx, ty, 900 * baseScale, 1600 * baseScale);
     } else {
         ctx.fillStyle = '#d2b48c';
         ctx.beginPath();
@@ -268,38 +264,39 @@ function draw() {
         ctx.fill();
     }
 
+    // Trous
     holes.forEach(h => {
-        if (images.trou && images.trou.complete) ctx.drawImage(images.trou, h.x - 100, h.y - 100, 200, 200);
+        if (images.trou && images.trou.complete)
+            ctx.drawImage(images.trou, h.x - 100*totalScale, h.y - 100*totalScale, 200*totalScale, 200*totalScale);
+
         const reliefScale = 0.9 + (difficulty - 1) * 0.12;
         if (images.trourelief && images.trourelief.complete) {
-            const size = 80 * reliefScale;
+            const size = 80 * reliefScale * totalScale;
             ctx.drawImage(images.trourelief, h.x - size/2, h.y - size/2, size, size);
         }
         if (h.eaten && images.troubord && images.troubord.complete) {
             const factor = 1.1 + (difficulty - 1) * 0.09;
-            const bSize = 102 * factor;
+            const bSize = 102 * factor * totalScale;
             ctx.drawImage(images.troubord, h.x - bSize/2, h.y - bSize/2, bSize, bSize);
         }
     });
 
+    // Bordure tapis
     if (images.tapisoblondbord && images.tapisoblondbord.complete) {
-        const tx = (WIDTH - 900 * scaleFactor) / 2;
-        const ty = (HEIGHT - 1600 * scaleFactor) / 2;
-        ctx.drawImage(images.tapisoblondbord, tx, ty, 900 * scaleFactor, 1600 * scaleFactor);
+        const tx = (WIDTH - 900 * baseScale) / 2;
+        const ty = (HEIGHT - 1600 * baseScale) / 2;
+        ctx.drawImage(images.tapisoblondbord, tx, ty, 900 * baseScale, 1600 * baseScale);
     }
 
+    // Ressort
     const currentLength = spring.length - spring.pulled;
-    if (!spring.disappearing || spring.alpha > 0) {
+    if ((!spring.disappearing || spring.alpha > 0) && images.ressort && images.ressort.complete) {
         ctx.globalAlpha = spring.alpha;
-        if (images.ressort && images.ressort.complete) {
-            ctx.drawImage(images.ressort, spring.x - spring.width / 2, spring.y - currentLength, spring.width, currentLength + 35);
-        } else {
-            ctx.fillStyle = '#555';
-            ctx.fillRect(spring.x - spring.width / 2, spring.y - currentLength, spring.width, currentLength + 30);
-        }
+        ctx.drawImage(images.ressort, spring.x - spring.width / 2, spring.y - currentLength, spring.width, currentLength + 35 * totalScale);
         ctx.globalAlpha = 1;
     }
 
+    // Bille
     if (ball.visible) {
         ctx.save();
         ctx.globalAlpha = ball.alpha;
@@ -312,42 +309,24 @@ function draw() {
             ctx.beginPath();
             ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#4488ff';
-            ctx.beginPath();
-            ctx.arc(-16, -16, 20, 0, Math.PI * 2);
-            ctx.fill();
         }
         ctx.restore();
     }
 }
 
-// ====================== BOUCLE ======================
-function gameLoop(timestamp) {
-    if (!lastTime) lastTime = timestamp;
-    const delta = (timestamp - lastTime) / 1000;
-    lastTime = timestamp;
-
-    if (gameRunning) updatePhysics(delta);
-    draw();
-    animationFrame = requestAnimationFrame(gameLoop);
-}
-
 // ====================== CONTRÔLES ======================
 function startDrag(e) {
     if (menuContent.classList.contains('show') || !ball.visible) return;
-
     const rect = canvas.getBoundingClientRect();
     const mx = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
     const my = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-
-    if (Math.hypot(mx - ball.x, my - ball.y) < 160) isDragging = true;
+    if (Math.hypot(mx - ball.x, my - ball.y) < 160 * baseScale * userScale) isDragging = true;
 }
 
 function moveDrag(e) {
     if (!isDragging || menuContent.classList.contains('show')) return;
     const rect = canvas.getBoundingClientRect();
     const my = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-
     spring.pulled = Math.max(0, Math.min(spring.maxLength * 0.95, my - (spring.y - spring.length)));
     ball.y = spring.y - spring.length + spring.pulled;
 }
@@ -358,11 +337,10 @@ function endDrag() {
 
     const pullRatio = spring.pulled / spring.maxLength;
     const powerSetting = parseFloat(document.getElementById('power').value) || 50;
-    const force = pullRatio * (powerSetting / 10) * 6.5;   // force doublée et plus
+    const force = pullRatio * (powerSetting / 10) * 6.5;
 
-    // ÉJECTION VERS LE BAS - beaucoup plus forte
     ball.vx = (Math.random() - 0.5) * 7;
-    ball.vy = Math.max(12, force / ball.mass * 1.4);   // vitesse minimale élevée
+    ball.vy = Math.max(12, force / ball.mass * 1.4);
 
     ballLaunched = true;
     if (!gameRunning) gameRunning = true;
@@ -397,7 +375,7 @@ canvas.addEventListener('touchend', endDrag);
 
 window.addEventListener('deviceorientation', handleDeviceOrientation);
 window.addEventListener('keydown', e => keys[e.key] = true);
-window.addEventListener('keyup',   e => keys[e.key] = false);
+window.addEventListener('keyup', e => keys[e.key] = false);
 window.addEventListener('resize', resize);
 
 // Sliders
@@ -405,15 +383,36 @@ const sliders = ['diff','holes','rebound','tiltSens','power','mass','scale','dur
 sliders.forEach(id => {
     const el = document.getElementById(id);
     const val = document.getElementById(id + 'Val');
-    if (el && val) el.addEventListener('input', () => val.textContent = el.value);
+    if (el && val) {
+        if (id === 'diff' || id === 'duration') {
+            el.step = "1";
+            if (id === 'duration') {
+                el.max = "5";
+                el.value = "2";
+            }
+        }
+        el.addEventListener('input', () => val.textContent = el.value);
+    }
 });
+
+// ====================== BOUCLE ======================
+function gameLoop(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const delta = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
+    if (gameRunning) updatePhysics(delta);
+    draw();
+    animationFrame = requestAnimationFrame(gameLoop);
+}
 
 // ====================== INIT ======================
 loadAssets();
 resize();
 resetBall();
+draw();                       // premier affichage
 requestAnimationFrame(gameLoop);
 
 setInterval(() => { if (gameRunning) handleKeyboard(); }, 16);
 
-console.log("🎮 HABILE - Correction finale : bourrelet fort seulement sur trous libres + éjection doublée");
+console.log("🎮 HABILE - Version complète corrigée (erreur startDrag résolue)");
